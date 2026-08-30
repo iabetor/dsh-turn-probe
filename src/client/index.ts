@@ -104,8 +104,8 @@ export function apply(ctx: Context): void {
         const events = await fetchTurnWindow(ctx, address, turn.startSeq, turn.endSeq)
         return events === undefined ? undefined : turnTextOf(events)
       },
-      analyzeTurn: async (node, turn, content) => {
-        return analyzeTurnModel(ctx, node, turn, content)
+      analyzeTurn: async (node, turn, content, signal, onSessionCreated) => {
+        return analyzeTurnModel(ctx, node, turn, content, signal, onSessionCreated)
       },
       openSession: (sessionId: string) => {
         // The slot-injected id is a plain string (a different pnpm-resolved

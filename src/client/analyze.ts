@@ -34,7 +34,7 @@ interface WorkspaceViewFace {
   sessionIds?: readonly string[]
 }
 interface SessionBindingFace {
-  beginSubmission?(input: { content: PromptTextPart[] }): { requestId: string; abandon(): void }
+  beginSubmission?(input: { text: string; images: readonly unknown[] }): { requestId: string; abandon(): void }
   prompt?(
     content: PromptTextPart[],
     mode: 'queue' | 'steer',
@@ -179,7 +179,11 @@ export async function analyzeTurn(
     onSessionCreated?.(sessionId)
 
     const content: PromptTextPart[] = [{ type: 'text', text: analysisPrompt(turnContent) }]
-    const handle = session.beginSubmission({ content })
+    const promptText = content[0]?.text ?? ''
+    // Register the local submission echo with the real contract shape
+    // ({ text, images }) so the chat view's pending bubble renders correctly
+    // (images must be an array — the chat view maps over it).
+    const handle = session.beginSubmission({ text: promptText, images: [] })
     // Bound the prompt admission round-trip so a stuck model never hangs the UI.
     const promptResult = await withTimeout(
       session.prompt(content, 'queue', signal, handle.requestId),
