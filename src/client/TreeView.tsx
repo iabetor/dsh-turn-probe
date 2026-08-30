@@ -33,8 +33,15 @@ export interface TurnProbeViewInjected {
   loadTurns: (node: SessionTreeNode) => Promise<TurnSummary[] | undefined>
   /** Load the full content of one turn window for the analysis payload. */
   loadTurnContent: (node: SessionTreeNode, turn: TurnSummary) => Promise<string | undefined>
-  /** Run the model analysis on one turn's content; returns the insight text. */
-  analyzeTurn: (node: SessionTreeNode, turn: TurnSummary, content: string) => Promise<string | undefined>
+  /** Run the model analysis on one turn's content; returns the insight text
+   * plus the throwaway analysis session id (for navigation). The callback
+   * fires as soon as the analysis session exists so the UI can navigate to
+   * it before the model reply completes. */
+  analyzeTurn: (node: SessionTreeNode, turn: TurnSummary, content: string,
+    signal?: AbortSignal, onSessionCreated?: (sessionId: string) => void) =>
+    Promise<{ text: string; sessionId: string } | undefined>
+  /** Navigate to another session (open it in the conversation column). */
+  openSession: (sessionId: string) => void
 }
 
 /** Markdown render labels for the preview (copy buttons etc.). */
@@ -220,7 +227,7 @@ function SessionList({
 
 /** The view body: flat session list with single-turn selection. */
 export function TurnProbeView({
-  useTree, useLineage, loadTurns, loadTurnContent, analyzeTurn, t: tRaw,
+  useTree, useLineage, loadTurns, loadTurnContent, analyzeTurn, openSession, t: tRaw,
 }: ConvViewProps
   & InjectFace<TurnProbeViewInjected>
   & { t: (key: string, params?: Record<string, unknown>) => string }) {
@@ -373,12 +380,15 @@ export function TurnProbeView({
       setAnalysis(t('analysis.empty'))
       return
     }
-    // Run the model analysis in a throwaway session.
-    const insight = await analyzeTurn(node, turn, content)
+    // Run the model analysis in a throwaway session. The session is opened
+    // (navigated to) as soon as it is created — via the onSessionCreated
+    // callback — so the user watches the analysis run live; the returned
+    // text lands in the analysis panel of this view when it completes.
+    const result = await analyzeTurn(node, turn, content, undefined, openSession)
     setAnalyzing(false)
-    setAnalysis(insight === undefined || insight === ''
+    setAnalysis(result === undefined || result.text === ''
       ? t('analysis.failed')
-      : insight)
+      : result.text)
   }
 
   return (

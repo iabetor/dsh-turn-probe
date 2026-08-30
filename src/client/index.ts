@@ -107,6 +107,13 @@ export function apply(ctx: Context): void {
       analyzeTurn: async (node, turn, content) => {
         return analyzeTurnModel(ctx, node, turn, content)
       },
+      openSession: (sessionId: string) => {
+        // The slot-injected id is a plain string (a different pnpm-resolved
+        // dsh-session copy); the service's open() expects its own SessionId
+        // brand. The runtime shape is identical, so bridge via unknown.
+        const sessions = ctx.sessions as { open?: (id: unknown) => void } | undefined
+        if (sessions?.open !== undefined) sessions.open(sessionId)
+      },
     }),
   }, TurnProbeView))
 }

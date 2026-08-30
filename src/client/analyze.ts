@@ -106,9 +106,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined>
   })
 }
 
+/** Result of one turn analysis: the assistant reply text plus the id of the
+ * throwaway session that produced it (for navigation). */
+export interface TurnAnalysisResult {
+  readonly text: string
+  readonly sessionId: string
+}
+
 /**
  * Run a model analysis of one turn's content in a throwaway session.
- * Returns the assistant reply text, or undefined on failure.
+ * Returns the assistant reply text plus the analysis session id, or
+ * undefined on failure. `onSessionCreated` fires as soon as the throwaway
+ * session is ready (after create + binding materialization), before the
+ * model reply is awaited — the UI can navigate there immediately so the
+ * user watches the analysis run live.
  */
 export async function analyzeTurn(
   ctx: { get(name: string): unknown },
@@ -116,7 +127,8 @@ export async function analyzeTurn(
   turn: TurnSummary,
   turnContent: string,
   signal?: AbortSignal,
-): Promise<string | undefined> {
+  onSessionCreated?: (sessionId: string) => void,
+): Promise<TurnAnalysisResult | undefined> {
   const sessions = ctx.get('sessions') as SessionServiceFace | undefined
   if (sessions === undefined || typeof sessions.create !== 'function') {
     warn('analyzeTurn early-out: sessions service missing or no create()')
@@ -162,6 +174,10 @@ export async function analyzeTurn(
       return undefined
     }
 
+    // The throwaway session is live and promptable — hand the id to the UI
+    // now so it can navigate to the analysis session while the model works.
+    onSessionCreated?.(sessionId)
+
     const content: PromptTextPart[] = [{ type: 'text', text: analysisPrompt(turnContent) }]
     const handle = session.beginSubmission({ content })
     // Bound the prompt admission round-trip so a stuck model never hangs the UI.
@@ -199,7 +215,8 @@ export async function analyzeTurn(
         }
         return undefined
       })(), 90_000)
-      return reply
+      if (reply === undefined) return undefined
+      return { text: reply, sessionId }
     } finally {
       signal?.removeEventListener('abort', onAbort)
       controller.abort()
