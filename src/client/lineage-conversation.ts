@@ -116,6 +116,19 @@ export interface LineageToolCall {
   readonly args?: string
 }
 
+/** One content-bearing event of a turn, in engine seq order (timeline). */
+export interface LineageTurnBlock {
+  readonly kind: 'user' | 'assistant' | 'tool' | 'turn-start' | 'turn-end'
+  /** Engine sequence number; ascending order = chronological order. */
+  readonly seq: number
+  /** User/assistant message text (full). */
+  readonly text?: string
+  /** Tool name (tool blocks only). */
+  readonly name?: string
+  /** Tool arguments JSON (tool blocks only). */
+  readonly args?: string
+}
+
 /** One turn assembled by the lineage builder. */
 export interface LineageTurn {
   /** Monotonic turn index (engine turn number, 1-based). */
@@ -134,6 +147,8 @@ export interface LineageTurn {
   assistantFull: string[]
   /** All tool calls of this turn (in seq order). */
   tools: LineageToolCall[]
+  /** Every content event of the turn in chronological (seq) order. */
+  blocks: LineageTurnBlock[]
 }
 
 /** The lineage view snapshot: turns in engine order plus the running flag. */
@@ -324,9 +339,11 @@ class LineageViewBuilder implements ConversationViewBuilder<LineageViewNode, Lin
     for (const { turnNumber, data: d } of ordered) {
       let turn = byTurn.get(turnNumber)
       if (turn === undefined) {
-        turn = { turn: turnNumber, userFull: [], assistantFull: [], tools: [] }
+        turn = { turn: turnNumber, userFull: [], assistantFull: [], tools: [], blocks: [] }
         byTurn.set(turnNumber, turn)
       }
+      // Blocks carry a real seq; the pending map already defaults to 0.
+      const seq = d.seq ?? 0
       switch (d.kind) {
         case 'turn-start':
           turn.startSeq = d.seq
@@ -339,13 +356,25 @@ class LineageViewBuilder implements ConversationViewBuilder<LineageViewNode, Lin
         case 'user':
           if (d.text !== undefined && turn.user === undefined) turn.user = d.text
           if (d.fullText !== undefined) turn.userFull.push(d.fullText)
+          if (d.fullText !== undefined) {
+            turn.blocks.push({ kind: 'user', seq, text: d.fullText })
+          }
           break
         case 'assistant':
           if (d.text !== undefined && turn.assistant === undefined) turn.assistant = d.text
           if (d.fullText !== undefined) turn.assistantFull.push(d.fullText)
+          if (d.fullText !== undefined) {
+            turn.blocks.push({ kind: 'assistant', seq, text: d.fullText })
+          }
           break
         case 'tool':
           turn.tools.push({
+            ...(d.toolName === undefined ? {} : { name: d.toolName }),
+            ...(d.toolArgs === undefined ? {} : { args: d.toolArgs }),
+          })
+          turn.blocks.push({
+            kind: 'tool',
+            seq,
             ...(d.toolName === undefined ? {} : { name: d.toolName }),
             ...(d.toolArgs === undefined ? {} : { args: d.toolArgs }),
           })

@@ -49,9 +49,9 @@ describe('lineageViewDefinition builder', () => {
     const turn = (n: number) => turnLocation(n)
     const nodes: LineageViewNode[] = [
       { ...withTurn('a', turn(1)), data: { kind: 'turn-start', seq: 10, time: 100, turn: 1 } },
-      { ...withTurn('b', turn(1)), data: { kind: 'user', seq: 11, text: 'hello' } },
+      { ...withTurn('b', turn(1)), data: { kind: 'user', seq: 11, text: 'hello', fullText: 'hello' } },
       { ...withTurn('c', turn(1)), data: { kind: 'tool', seq: 12, toolName: 'bash', toolArgs: '{"cmd":"ls"}' } },
-      { ...withTurn('d', turn(1)), data: { kind: 'assistant', seq: 13, text: 'done' } },
+      { ...withTurn('d', turn(1)), data: { kind: 'assistant', seq: 13, text: 'done', fullText: 'done' } },
       { ...withTurn('e', turn(1)), data: { kind: 'turn-end', seq: 14, time: 500, turn: 1 } },
       { ...withTurn('f', turn(2)), data: { kind: 'turn-start', seq: 20, time: 600, turn: 2 } },
     ]
@@ -65,6 +65,16 @@ describe('lineageViewDefinition builder', () => {
     assert.equal(t1.startedAt, 100)
     assert.equal(t1.endedAt, 500)
     assert.equal(snap.running, true, 'turn 2 is still open')
+    // blocks preserve chronological (seq) order across content kinds
+    assert.deepEqual(t1.blocks.map(b => [b.kind, b.seq]), [
+      ['user', 11],
+      ['tool', 12],
+      ['assistant', 13],
+    ])
+    const toolBlock = t1.blocks[1]!
+    assert.equal(toolBlock.kind, 'tool')
+    assert.equal(toolBlock.name, 'bash')
+    assert.equal(toolBlock.args, '{"cmd":"ls"}')
   })
 
   test('running flag while a turn is open', () => {

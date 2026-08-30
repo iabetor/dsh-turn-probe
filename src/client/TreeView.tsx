@@ -69,19 +69,36 @@ interface PreviewBlock {
   text: string
 }
 
-/** Build PreviewBlocks from a live turn (engine snapshot). */
+/** Build PreviewBlocks from a live turn (engine snapshot), in the original
+ * chronological (seq) order — tool calls appear where they actually happened
+ * inside the turn instead of being grouped at the end. */
 function previewBlocksOf(turn: LineageTurn | undefined): PreviewBlock[] | null {
   if (turn === undefined) return null
   const blocks: PreviewBlock[] = []
-  for (const text of turn.userFull) blocks.push({ kind: 'user', role: '用户', text })
-  for (const tool of turn.tools) {
-    const name = tool.name ?? '?'
-    const args = tool.args ?? ''
-    // Tool blocks carry their label in `role`; `text` holds the args so the
-    // analysis prompt keeps them (the renderer shows the role only).
-    blocks.push({ kind: 'tool', role: `工具调用: ${name}`, text: args })
+  for (const block of turn.blocks) {
+    switch (block.kind) {
+      case 'user':
+        if (block.text !== undefined) blocks.push({ kind: 'user', role: '用户', text: block.text })
+        break
+      case 'assistant':
+        if (block.text !== undefined) {
+          blocks.push({ kind: 'assistant', role: '助手', text: block.text })
+        }
+        break
+      case 'tool': {
+        const name = block.name ?? '?'
+        const args = block.args ?? ''
+        // Tool blocks carry their label in `role`; `text` holds the args so the
+        // analysis prompt keeps them (the renderer shows the role only).
+        blocks.push({ kind: 'tool', role: `工具调用: ${name}`, text: args })
+        break
+      }
+      case 'turn-start':
+      case 'turn-end':
+        // Boundary markers carry no display content.
+        break
+    }
   }
-  for (const text of turn.assistantFull) blocks.push({ kind: 'assistant', role: '助手', text })
   return blocks.length > 0 ? blocks : null
 }
 
@@ -420,7 +437,9 @@ export function TurnProbeView({
                         ) : (
                           <>
                             {block.role !== '' && (
-                              <div className={css.previewRole}>{block.role}</div>
+                              <div className={`${css.previewRole} ${block.kind !== '' ? css[block.kind] : ''}`}>
+                                {block.role}
+                              </div>
                             )}
                             {block.text !== '' && (
                               <MarkdownText
