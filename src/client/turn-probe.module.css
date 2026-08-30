@@ -22,6 +22,7 @@
   min-height: 0;
   display: flex;
   flex-direction: row;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -29,6 +30,7 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  max-height: 70vh;
   overflow-y: auto;
   padding-right: 8px;
   border-right: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.15));
@@ -334,7 +336,7 @@
 /* ---- Analysis output ---- */
 
 .preview {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-self: flex-start;
   width: 42%;
   min-width: 280px;
@@ -363,10 +365,10 @@
   margin: 0;
   padding: 10px 12px;
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 60vh;
+  max-height: 65vh;
   min-height: 0;
   overflow-y: auto;
 }
@@ -441,10 +443,19 @@
 }
 
 /* Rendered markdown body */
+.previewBody :global(p),
+.previewBody :global(h1),
+.previewBody :global(h2),
+.previewBody :global(h3),
+.previewBody :global(h4) {
+  margin: 0 0 4px;
+}
+.previewBody :global(p:last-child) { margin-bottom: 0; }
 .previewBody :global(pre) {
   background: var(--dsw-alias-fill-subtle, rgba(127,127,127,0.08));
   padding: 8px 10px;
   border-radius: 6px;
+  margin: 4px 0;
   overflow-x: auto;
 }
 
