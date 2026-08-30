@@ -19,7 +19,8 @@
     "lib/index.d.ts",
     "lib/client.js",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README_EN.md"
   ],
   "scripts": {
     "build": "tsdown",
