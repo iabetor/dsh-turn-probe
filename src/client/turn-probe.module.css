@@ -450,3 +450,29 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
+
+/* Block-separator style for the live turn preview. */
+.previewBlock + .previewBlock {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.15));
+}
+
+.previewBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.previewRole {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--dsw-alias-fill-subtle, rgba(127,127,127,0.12));
+  color: var(--dsw-alias-label-secondary, #aaa);
+  letter-spacing: 0.3px;
+  text-transform: none;
+}

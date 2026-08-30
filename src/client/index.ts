@@ -70,10 +70,14 @@ export function apply(ctx: Context): void {
     // master runtime accepts any registered NS string.
     locale: NS as never,
     label: () => t('view.sessionTree'),
-    inject: (sessionId: SessionId): TurnProbeViewInjected => ({
+    // The slot-injected SessionId comes from a different pnpm-resolved
+    // dsh-session copy than the one we re-export, so the two BRAND nominal
+    // types don't match. Widen to `string` for the parameter — the runtime
+    // shape is identical (both are string at the value layer).
+    inject: (sessionId: string): TurnProbeViewInjected => ({
       hooks: {
-        tree: treeStore(sessionId),
-        lineage: lineageStore(sessionId),
+        tree: treeStore(sessionId as SessionId),
+        lineage: lineageStore(sessionId as SessionId),
       },
       loadTurns: async (node) => {
         // The harness loads the parent session's subagent catalog only when the

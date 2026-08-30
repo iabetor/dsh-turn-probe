@@ -59,6 +59,32 @@ interface SelectedTurn {
   index: number
 }
 
+/** One rendered block in the turn preview: role chip + markdown body. */
+interface PreviewBlock {
+  /** Block role: 'user' | 'tool' | 'assistant' | '' (raw fallback). */
+  kind: 'user' | 'tool' | 'assistant' | ''
+  /** Localized role label, e.g. "用户" / "工具调用: bash" / "助手". */
+  role: string
+  /** Markdown body, rendered with the same MarkdownText as the chat view. */
+  text: string
+}
+
+/** Build PreviewBlocks from a live turn (engine snapshot). */
+function previewBlocksOf(turn: LineageTurn | undefined): PreviewBlock[] | null {
+  if (turn === undefined) return null
+  const blocks: PreviewBlock[] = []
+  for (const text of turn.userFull) blocks.push({ kind: 'user', role: '用户', text })
+  for (const tool of turn.tools) {
+    const name = tool.name ?? '?'
+    const args = tool.args ?? ''
+    // Tool blocks carry their label in `role`; `text` holds the args so the
+    // analysis prompt keeps them (the renderer shows the role only).
+    blocks.push({ kind: 'tool', role: `工具调用: ${name}`, text: args })
+  }
+  for (const text of turn.assistantFull) blocks.push({ kind: 'assistant', role: '助手', text })
+  return blocks.length > 0 ? blocks : null
+}
+
 function SessionList({
   rows, t, selected, onSelectTurn,
 }: {
@@ -163,7 +189,7 @@ export function TurnProbeView({
   const liveTurns = useLineage(value => value)
   const [turnsCache, setTurnsCache] = useState<Map<string, TurnSummary[]>>(() => new Map())
   const [selected, setSelected] = useState<SelectedTurn | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
+  const [preview, setPreview] = useState<PreviewBlock[] | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewMode, setPreviewMode] = useState<'preview' | 'source'>('preview')
   const [analyzing, setAnalyzing] = useState(false)
@@ -232,16 +258,9 @@ export function TurnProbeView({
     const liveTurn = isCurrent && liveTurns !== null
       ? liveTurns.find(t => t.turn === index + 1)
       : undefined
-    if (liveTurn !== undefined
-      && (liveTurn.userFull.length > 0 || liveTurn.assistantFull.length > 0)) {
-      const parts: string[] = []
-      for (const text of liveTurn.userFull) parts.push(`用户: ${text}`)
-      for (const tool of liveTurn.tools) {
-        const name = tool.name ?? '?'
-        parts.push(`工具调用: ${name}(${tool.args ?? ''})`)
-      }
-      for (const text of liveTurn.assistantFull) parts.push(`助手: ${text}`)
-      setPreview(parts.length > 0 ? parts.join('\n') : t('analysis.empty'))
+    if (liveTurn !== undefined) {
+      const blocks = previewBlocksOf(liveTurn)
+      setPreview(blocks)
       setPreviewLoading(false)
       return
     }
@@ -253,9 +272,13 @@ export function TurnProbeView({
     }
     try {
       const content = await loadTurnContent(node, turn)
-      setPreview(content === undefined || content === '' ? t('analysis.empty') : content)
+      // Non-current sessions don't have engine snapshots; fall back to the
+      // legacy text form wrapped in a single block.
+      setPreview(content === undefined || content === ''
+        ? null
+        : [{ kind: '', role: '', text: content }])
     } catch {
-      setPreview(t('analysis.empty'))
+      setPreview(null)
     } finally {
       setPreviewLoading(false)
     }
@@ -269,14 +292,7 @@ export function TurnProbeView({
     if (node?.current !== true) return
     const liveTurn = liveTurns.find(t => t.turn === selected.index + 1)
     if (liveTurn === undefined) return
-    const parts: string[] = []
-    for (const text of liveTurn.userFull) parts.push(`用户: ${text}`)
-    for (const tool of liveTurn.tools) {
-      const name = tool.name ?? '?'
-      parts.push(`工具调用: ${name}(${tool.args ?? ''})`)
-    }
-    for (const text of liveTurn.assistantFull) parts.push(`助手: ${text}`)
-    setPreview(parts.length > 0 ? parts.join('\n') : t('analysis.empty'))
+    setPreview(previewBlocksOf(liveTurn))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveTurns, selected])
 
@@ -296,9 +312,19 @@ export function TurnProbeView({
       return
     }
     // Ensure the content is loaded (selection may have raced the preview).
-    let content = preview !== null && preview !== t('analysis.empty')
-      ? preview
-      : await loadTurnContent(node, turn)
+    let content: string | undefined
+    if (preview !== null) {
+      content = preview
+        .map(block => {
+          if (block.kind === 'tool') {
+            return `工具调用: ${block.role.replace('工具调用: ', '')}${block.text !== '' ? '(' + block.text + ')' : ''}`
+          }
+          if (block.role !== '') return `${block.role}\n${block.text}`
+          return block.text
+        })
+        .filter(part => part !== '')
+        .join('\n\n')
+    }
     if (content === undefined || content === '') {
       content = await loadTurnContent(node, turn)
     }
@@ -350,16 +376,34 @@ export function TurnProbeView({
             </div>
             {!previewLoading && preview !== null && (
               previewMode === 'source'
-                ? <pre className={css.previewBody}>{preview}</pre>
+                ? (
+                  <pre className={css.previewBody}>
+                    {preview.map((block, i) => (
+                      <div key={i}>
+                        {block.role !== '' && <strong>{block.role}</strong>}
+                        {block.role !== '' && '\n'}
+                        {block.text}
+                        {i < preview.length - 1 && '\n\n'}
+                      </div>
+                    ))}
+                  </pre>
+                )
                 : (
                   <div className={css.previewBody}>
-                    {/* Master accepts `labels`; the rc peer only knows
-                        `codeLabels`. Pass both for cross-version support. */}
-                    <MarkdownText
-                      {...({ labels: mdLabels(t) } as object)}
-                      text={preview}
-                      codeLabels={codeLabels(t)}
-                    />
+                    {preview.map((block, i) => (
+                      <div key={i} className={css.previewBlock}>
+                        {block.role !== '' && (
+                          <div className={css.previewRole}>{block.role}</div>
+                        )}
+                        {block.kind !== 'tool' && block.text !== '' && (
+                          <MarkdownText
+                            {...({ labels: mdLabels(t) } as object)}
+                            text={block.text}
+                            codeLabels={codeLabels(t)}
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )
             )}

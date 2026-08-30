@@ -9,7 +9,6 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "allowImportingTsExtensions": true,
     "types": []
