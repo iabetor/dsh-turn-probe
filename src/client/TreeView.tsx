@@ -85,6 +85,29 @@ function previewBlocksOf(turn: LineageTurn | undefined): PreviewBlock[] | null {
   return blocks.length > 0 ? blocks : null
 }
 
+/** One tool-call block: role chip + collapsible args (hidden by default). */
+function ToolBlock({ role, args }: {
+  role: string
+  args: string
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className={css.toolBlock}>
+      <button
+        type="button"
+        className={css.toolToggle}
+        onClick={() => { setOpen(v => !v) }}
+      >
+        <span className={css.toolCaret}>{open ? '▾' : '▸'}</span>
+        <span className={css.previewRole}>{role}</span>
+      </button>
+      {open && args !== '' && (
+        <pre className={css.toolArgs}>{args}</pre>
+      )}
+    </div>
+  )
+}
+
 function SessionList({
   rows, t, selected, onSelectTurn,
 }: {
@@ -392,15 +415,21 @@ export function TurnProbeView({
                   <div className={css.previewBody}>
                     {preview.map((block, i) => (
                       <div key={i} className={css.previewBlock}>
-                        {block.role !== '' && (
-                          <div className={css.previewRole}>{block.role}</div>
-                        )}
-                        {block.kind !== 'tool' && block.text !== '' && (
-                          <MarkdownText
-                            {...({ labels: mdLabels(t) } as object)}
-                            text={block.text}
-                            codeLabels={codeLabels(t)}
-                          />
+                        {block.kind === 'tool' ? (
+                          <ToolBlock role={block.role} args={block.text} />
+                        ) : (
+                          <>
+                            {block.role !== '' && (
+                              <div className={css.previewRole}>{block.role}</div>
+                            )}
+                            {block.text !== '' && (
+                              <MarkdownText
+                                {...({ labels: mdLabels(t) } as object)}
+                                text={block.text}
+                                codeLabels={codeLabels(t)}
+                              />
+                            )}
+                          </>
                         )}
                       </div>
                     ))}

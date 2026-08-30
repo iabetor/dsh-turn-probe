@@ -334,9 +334,11 @@
 /* ---- Analysis output ---- */
 
 .preview {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
+  flex: 0 1 auto;
+  align-self: flex-start;
+  width: 42%;
+  min-width: 280px;
+  max-height: 100%;
   margin: 0 0 0 0;
   border: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.22));
   border-radius: 6px;
@@ -364,7 +366,7 @@
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
-  flex: 1;
+  max-height: 60vh;
   min-height: 0;
   overflow-y: auto;
 }
@@ -475,4 +477,49 @@
   color: var(--dsw-alias-label-secondary, #aaa);
   letter-spacing: 0.3px;
   text-transform: none;
+}
+
+/* Collapsible tool-call block */
+.toolBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: inherit;
+}
+
+.toolToggle:hover {
+  opacity: 0.85;
+}
+
+.toolCaret {
+  font-size: 10px;
+  color: var(--dsw-alias-label-tertiary, #888);
+  width: 12px;
+  flex: none;
+}
+
+.toolArgs {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.2));
+  border-radius: 5px;
+  background: var(--dsw-alias-bg-layer-1, rgba(127,127,127,0.08));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
 }
