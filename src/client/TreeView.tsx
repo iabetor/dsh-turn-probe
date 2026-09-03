@@ -3,15 +3,19 @@
  * (single selection), Analyze assembles that turn's content for the model.
  */
 
-import { useEffect, useState } from './react.ts'
+import { useEffect, useRef, useState } from './react.ts'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import { DEFAULT_ANALYSIS_INSTRUCT } from './analyze.ts'
 import type { SessionTreeNode } from './tree.ts'
 import type { TurnSummary } from './turns.ts'
 import type { LineageTurn } from './lineage-conversation.ts'
-import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MarkdownText, IconTriangleRightFill14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { React } from './react.ts'
 import css from './turn-probe.module.css'
+
+/** localStorage key remembering the user's custom analysis instruction. */
+const PROMPT_STORAGE_KEY = 'dsh-turn-probe.analysis-instruct'
 
 /** Minimal observable snapshot face (structural match with dsh-client-store). */
 export interface TreeSnapshotStore<T> {
@@ -36,12 +40,18 @@ export interface TurnProbeViewInjected {
   /** Run the model analysis on one turn's content; returns the insight text
    * plus the throwaway analysis session id (for navigation). The callback
    * fires as soon as the analysis session exists so the UI can navigate to
-   * it before the model reply completes. */
+   * it before the model reply completes. `instruct` overrides the built-in
+   * analysis instruction when supplied. */
   analyzeTurn: (node: SessionTreeNode, turn: TurnSummary, content: string,
-    signal?: AbortSignal, onSessionCreated?: (sessionId: string) => void) =>
+    signal?: AbortSignal, onSessionCreated?: (sessionId: string) => void,
+    instruct?: string) =>
     Promise<{ text: string; sessionId: string } | undefined>
   /** Navigate to another session (open it in the conversation column). */
   openSession: (sessionId: string) => void
+  /** Grow the Conversation engine's window one older page; true when history
+   * actually advanced (the lineage snapshot changed). Used by the auto-load
+   * pager when the current session's turn list is scrolled to the top. */
+  loadOlder: () => Promise<boolean>
 }
 
 /** Markdown render labels for the preview (copy buttons etc.). */
@@ -122,7 +132,9 @@ function ToolBlock({ role, args }: {
         className={css.toolToggle}
         onClick={() => { setOpen(v => !v) }}
       >
-        <span className={css.toolCaret}>{open ? '▾' : '▸'}</span>
+        <span className={css.toolCaret}>
+          <IconTriangleRightFill14 size={10} className={open ? css.toggleOpen : undefined} />
+        </span>
         <span className={css.previewRole}>{role}</span>
       </button>
       {open && args !== '' && (
@@ -140,7 +152,10 @@ function SessionList({
   selected: SelectedTurn | null
   onSelectTurn: (sessionId: string, index: number) => void
 }) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  // The current session's node is expanded by default so the tab opens onto
+  // its live turns (same "latest first" landing as the trajectory table).
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
+    new Set(rows.filter(row => row.node.current).map(row => row.node.sessionId)))
   const toggleSession = (id: string): void => {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -166,7 +181,7 @@ function SessionList({
                 className={`${css.toggle} ${isOpen ? css.expanded : ''}`}
                 onClick={() => { toggleSession(node.sessionId) }}
               >
-                {isOpen ? '▾' : '▸'}
+                <IconTriangleRightFill14 size={12} className={isOpen ? css.toggleOpen : undefined} />
               </span>
               <span
                 className={`${css.label} ${isCurrent ? css.current : ''}`}
@@ -179,7 +194,10 @@ function SessionList({
               <span className={`${css.role} ${isMain ? '' : css.subagent}`}>{role}</span>
             </span>
             {isOpen && (
-              <ul className={css.turns}>
+              <ul
+                className={css.turns}
+                {...(isCurrent ? { 'data-current-turns': '' } : {})}
+              >
                 {turns === null && <li className={css.loading}>…</li>}
                 {turns !== null && turns.length === 0 && (
                   <li className={css.empty}>{t('tree.noTurns')}</li>
@@ -227,7 +245,7 @@ function SessionList({
 
 /** The view body: flat session list with single-turn selection. */
 export function TurnProbeView({
-  useTree, useLineage, loadTurns, loadTurnContent, analyzeTurn, openSession, t: tRaw,
+  useTree, useLineage, loadTurns, loadTurnContent, analyzeTurn, openSession, loadOlder, t: tRaw,
 }: ConvViewProps
   & InjectFace<TurnProbeViewInjected>
   & { t: (key: string, params?: Record<string, unknown>) => string }) {
@@ -241,6 +259,102 @@ export function TurnProbeView({
   const [previewMode, setPreviewMode] = useState<'preview' | 'source'>('preview')
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<string | null>(null)
+
+  // Editable analysis instruction: initialized from the user's last custom
+  // prompt (localStorage) or the built-in default; a reset button restores
+  // the default. Stored per browser, not per session.
+  const [promptDraft, setPromptDraft] = useState<string>(() => {
+    try {
+      const stored = window.localStorage.getItem(PROMPT_STORAGE_KEY)
+      return stored !== null && stored !== '' ? stored : DEFAULT_ANALYSIS_INSTRUCT
+    } catch {
+      return DEFAULT_ANALYSIS_INSTRUCT
+    }
+  })
+  const resetPrompt = (): void => {
+    setPromptDraft(DEFAULT_ANALYSIS_INSTRUCT)
+    try {
+      window.localStorage.removeItem(PROMPT_STORAGE_KEY)
+    } catch {
+      // Storage may be unavailable (private mode); the in-memory default stands.
+    }
+  }
+
+  // Auto-load older history: when the scroll container reaches the very top
+  // and the current session still streams live turns (engine window not yet
+  // exhausted), page one older window in. Mirrors ui-trajectory's pager.
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const loadingOlderRef = useRef(false)
+  const exhaustedRef = useRef(false)
+  const anchorScrollHeightRef = useRef<number | null>(null)
+  const initialAnchorRef = useRef<string | null>(null)
+  const [olderLoading, setOlderLoading] = useState(false)
+
+  const currentTurnCount = liveTurns === null ? null : liveTurns.length
+
+  const requestOlder = async (): Promise<void> => {
+    if (loadingOlderRef.current || exhaustedRef.current) return
+    loadingOlderRef.current = true
+    setOlderLoading(true)
+    const pane = listRef.current
+    if (pane !== null) anchorScrollHeightRef.current = pane.scrollHeight
+    try {
+      const advanced = await loadOlder()
+      if (!advanced) exhaustedRef.current = true
+    } finally {
+      loadingOlderRef.current = false
+      setOlderLoading(false)
+    }
+  }
+
+  // Open onto the latest turns: whenever the live window for the current
+  // session first becomes visible (or the session changes), scroll the list
+  // to the bottom so the newest turn is in view — same landing as the
+  // trajectory table. Only the first show per session anchors; later turns
+  // appended by the engine keep the tail only while the user is at it.
+  const currentSessionId = tree?.sessionId ?? null
+  useEffect(() => {
+    if (liveTurns === null || liveTurns.length === 0) return
+    const key = currentSessionId ?? ''
+    if (initialAnchorRef.current === key) return
+    initialAnchorRef.current = key
+    const pane = listRef.current
+    if (pane !== null) pane.scrollTop = pane.scrollHeight
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTurnCount, currentSessionId])
+
+  // Fill-to-viewport: when the current session's turn list is expanded but
+  // does not yet overflow the scroll container (no scrollbar — a scroll
+  // event would never fire), page a bounded amount of older history in so
+  // the user can actually scroll. Capped at a few pages so a short engine
+  // window never triggers a full-history backfill on open.
+  useEffect(() => {
+    if (olderLoading) return
+    if (exhaustedRef.current) return
+    if (liveTurns === null || liveTurns.length === 0) return
+    const pane = listRef.current
+    if (pane === null) return
+    const currentTurns = pane.querySelector('[data-current-turns]')
+    if (currentTurns === null) return
+    if (pane.scrollHeight > pane.clientHeight + 4) return
+    void requestOlder()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTurnCount, olderLoading, tree])
+
+  // The lineage snapshot grows when older events are prepended; once it does,
+  // keep the user's reading position by compensating the scroll delta. This
+  // effect keys off the live turn count rather than a layout effect because
+  // the pager only needs to fire after the snapshot commit, not mid-frame.
+  useEffect(() => {
+    if (anchorScrollHeightRef.current === null) return
+    const pane = listRef.current
+    if (pane === null) return
+    const delta = pane.scrollHeight - anchorScrollHeightRef.current
+    if (delta <= 0) return
+    pane.scrollTop = Math.max(0, pane.scrollTop + delta)
+    anchorScrollHeightRef.current = null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTurnCount])
 
   // Load turns once for every session when the tree first appears. Live
   // updates come from the engine snapshot (useLineage); no polling needed.
@@ -384,7 +498,17 @@ export function TurnProbeView({
     // (navigated to) as soon as it is created — via the onSessionCreated
     // callback — so the user watches the analysis run live; the returned
     // text lands in the analysis panel of this view when it completes.
-    const result = await analyzeTurn(node, turn, content, undefined, openSession)
+    // The current draft (default or user-customized) is persisted so the
+    // next analysis opens with the same instruction.
+    const instruct = promptDraft.trim()
+    if (instruct !== '') {
+      try {
+        window.localStorage.setItem(PROMPT_STORAGE_KEY, instruct)
+      } catch {
+        // Storage may be unavailable; the analysis still proceeds in memory.
+      }
+    }
+    const result = await analyzeTurn(node, turn, content, undefined, openSession, instruct === '' ? undefined : instruct)
     setAnalyzing(false)
     setAnalysis(result === undefined || result.text === ''
       ? t('analysis.failed')
@@ -394,7 +518,19 @@ export function TurnProbeView({
   return (
     <div className={css.root} data-turn-probe-view data-conversation-composer-overlay="">
       <div className={css.body}>
-        <div className={css.listScroll}>
+        <div
+          ref={listRef}
+          className={css.listScroll}
+          onScroll={(event) => {
+            // At the very top of the scroll container, older history (if any)
+            // sits just above the first rendered turn — page it in, matching
+            // how the trajectory table auto-loads when scrolled to its top.
+            const pane = event.currentTarget
+            if (pane.scrollTop > 48) return
+            void requestOlder()
+          }}
+        >
+          {olderLoading && <div className={css.olderLoading}>{t('tree.loadingOlder')}</div>}
           <SessionList
             rows={rows}
             t={t}
@@ -468,6 +604,34 @@ export function TurnProbeView({
           </div>
         )}
       </div>
+      {selected !== null && (
+        <div className={css.promptEditor}>
+          <div className={css.promptHeader}>
+            <span className={css.promptLabel}>{t('prompt.label')}</span>
+            <button
+              type="button"
+              className={css.promptReset}
+              onClick={resetPrompt}
+              disabled={promptDraft === DEFAULT_ANALYSIS_INSTRUCT}
+            >
+              {t('prompt.reset')}
+            </button>
+          </div>
+          <textarea
+            className={css.promptInput}
+            value={promptDraft}
+            spellCheck={false}
+            onChange={(event) => { setPromptDraft(event.target.value) }}
+            onKeyDown={(event) => {
+              // Cmd/Ctrl+Enter runs the analysis with the edited instruction.
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                event.preventDefault()
+                void runAnalysis()
+              }
+            }}
+          />
+        </div>
+      )}
       <div className={css.metricsBar}>
         {selected === null ? (
           <span className={css.dim}>{t('selection.hint')}</span>

@@ -36,6 +36,19 @@
   border-right: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.15));
 }
 
+/* Older-history auto-loading indicator (pinned above the list). */
+.olderLoading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary, #999);
+  text-align: center;
+  padding: 6px 8px;
+  background: var(--dsw-alias-bg-layer-1, #1e1e1e);
+  border-bottom: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.12));
+}
+
 /* ---- Session list ---- */
 
 .sessionTree {
@@ -103,12 +116,21 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  font-size: 11px;
   color: var(--dsw-alias-label-secondary, #888);
   cursor: pointer;
   flex: none;
   border-radius: 4px;
   transition: background 80ms ease, color 80ms ease;
+}
+
+/* DSH triangle glyph: rotated 90° for the expanded state, animated. */
+.sessionTree .toggle svg {
+  display: block;
+  transition: transform 120ms ease;
+}
+
+.sessionTree .toggle .toggleOpen {
+  transform: rotate(90deg);
 }
 
 .sessionTree .toggle:hover {
@@ -329,6 +351,69 @@
   cursor: not-allowed;
 }
 
+/* ---- Editable analysis instruction ---- */
+
+.promptEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+  border-top: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.2));
+  padding: 8px 12px 2px;
+}
+
+.promptHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.promptLabel {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #888);
+}
+
+.promptReset {
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--dsw-alias-state-business-primary, #1677ff);
+  cursor: pointer;
+}
+
+.promptReset:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.promptReset:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.promptInput {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 64px;
+  max-height: 160px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-subtle, rgba(127,127,127,0.25));
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1, #1b1e22);
+  color: var(--dsw-alias-label-primary, #e8e8e8);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.promptInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary, #1677ff);
+}
+
 /* ---- Analysis output ---- */
 
 .preview {
@@ -526,10 +611,21 @@
 }
 
 .toolCaret {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--dsw-alias-label-tertiary, #888);
   width: 12px;
   flex: none;
+}
+
+.toolCaret svg {
+  display: block;
+  transition: transform 120ms ease;
+}
+
+.toolCaret .toggleOpen {
+  transform: rotate(90deg);
 }
 
 .toolArgs {

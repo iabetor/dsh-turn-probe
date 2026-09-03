@@ -46,21 +46,26 @@ interface RemoteSessionFace {
   follow?(request: { address: unknown; maxMessages?: number }, signal?: AbortSignal): AsyncIterable<unknown>
 }
 
-/** Analysis instruction prefix. */
-const INSTRUCT = [
+/** Default analysis instruction (the editable part users see and may override). */
+export const DEFAULT_ANALYSIS_INSTRUCT = [
   '你是 DSH 的会话链路分析助手。',
   '下面是一次对话轮次（turn）的完整内容，包含用户输入、工具调用和助手回复。',
   '请分析这次问答：1) 用户想解决什么问题；2) 助手做了什么（工具调用是否合理）；',
   '3) 结果是否成功，如果失败原因是什么；4) 给出改进建议。',
   '用简洁的中文回答，分点列出。',
-  '',
-  '===== 对话内容 =====',
-  '',
 ].join('\n')
 
-/** Build the analysis prompt text for one turn. */
-export function analysisPrompt(turnContent: string): string {
-  return `${INSTRUCT}${turnContent}`
+/** Separator that introduces the raw turn content (kept out of the editable instruct). */
+const CONTENT_MARKER = '\n\n===== 对话内容 =====\n\n'
+
+/**
+ * Build the analysis prompt text for one turn.
+ * @param turnContent - the raw turn text to analyze.
+ * @param instruct - analysis instruction; defaults to {@link DEFAULT_ANALYSIS_INSTRUCT}.
+ */
+export function analysisPrompt(turnContent: string, instruct: string = DEFAULT_ANALYSIS_INSTRUCT): string {
+  const trimmed = instruct.trim()
+  return trimmed === '' ? turnContent : `${trimmed}${CONTENT_MARKER}${turnContent}`
 }
 
 /** Extract text from one reply record for display (assistant/message). */
@@ -120,6 +125,14 @@ export interface TurnAnalysisResult {
  * session is ready (after create + binding materialization), before the
  * model reply is awaited — the UI can navigate there immediately so the
  * user watches the analysis run live.
+ * @param ctx - client root context (service lookup).
+ * @param node - analyzed session tree node (workspace grouping).
+ * @param turn - the analyzed turn summary.
+ * @param turnContent - raw turn text appended after the instruction.
+ * @param signal - optional cancellation for the prompt and reply wait.
+ * @param onSessionCreated - navigation hook when the analysis session exists.
+ * @param instruct - analysis instruction; defaults to the built-in
+ *   {@link DEFAULT_ANALYSIS_INSTRUCT}.
  */
 export async function analyzeTurn(
   ctx: { get(name: string): unknown },
@@ -128,6 +141,7 @@ export async function analyzeTurn(
   turnContent: string,
   signal?: AbortSignal,
   onSessionCreated?: (sessionId: string) => void,
+  instruct: string = DEFAULT_ANALYSIS_INSTRUCT,
 ): Promise<TurnAnalysisResult | undefined> {
   const sessions = ctx.get('sessions') as SessionServiceFace | undefined
   if (sessions === undefined || typeof sessions.create !== 'function') {
@@ -178,7 +192,7 @@ export async function analyzeTurn(
     // now so it can navigate to the analysis session while the model works.
     onSessionCreated?.(sessionId)
 
-    const content: PromptTextPart[] = [{ type: 'text', text: analysisPrompt(turnContent) }]
+    const content: PromptTextPart[] = [{ type: 'text', text: analysisPrompt(turnContent, instruct) }]
     const promptText = content[0]?.text ?? ''
     // Register the local submission echo with the real contract shape
     // ({ text, images }) so the chat view's pending bubble renders correctly

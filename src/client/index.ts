@@ -104,8 +104,8 @@ export function apply(ctx: Context): void {
         const events = await fetchTurnWindow(ctx, address, turn.startSeq, turn.endSeq)
         return events === undefined ? undefined : turnTextOf(events)
       },
-      analyzeTurn: async (node, turn, content, signal, onSessionCreated) => {
-        return analyzeTurnModel(ctx, node, turn, content, signal, onSessionCreated)
+      analyzeTurn: async (node, turn, content, signal, onSessionCreated, instruct) => {
+        return analyzeTurnModel(ctx, node, turn, content, signal, onSessionCreated, instruct)
       },
       openSession: (sessionId: string) => {
         // The slot-injected id is a plain string (a different pnpm-resolved
@@ -113,6 +113,21 @@ export function apply(ctx: Context): void {
         // brand. The runtime shape is identical, so bridge via unknown.
         const sessions = ctx.sessions as { open?: (id: unknown) => void } | undefined
         if (sessions?.open !== undefined) sessions.open(sessionId)
+      },
+      loadOlder: async () => {
+        // Grow the Conversation engine's shared history window one page (the
+        // lineage target is built from that window, so prepended events make
+        // older turns appear in the live list). Mirrors ui-trajectory's
+        // loadOlder: report whether the lineage snapshot actually advanced.
+        const sessions = ctx.sessions as {
+          binding?: (id: unknown) => { session?: { loadOlder?: () => Promise<unknown> } } | undefined
+        } | undefined
+        const session = sessions?.binding?.(sessionId as unknown)?.session
+        if (session?.loadOlder === undefined) return false
+        const lineage = lineageStore(sessionId as SessionId)
+        const before = lineage.getSnapshot()
+        await session.loadOlder()
+        return lineage.getSnapshot() !== before
       },
     }),
   }, TurnProbeView))
