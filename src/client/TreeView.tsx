@@ -65,11 +65,6 @@ function mdLabels(t: (key: string) => string): {
   }
 }
 
-/** rc-peer codeLabels (master renamed it to `labels`); pass both. */
-function codeLabels(t: (key: string) => string): { copyLabel: string; copiedLabel: string } {
-  return { copyLabel: t('markdown.copy'), copiedLabel: t('markdown.copied') }
-}
-
 /** The single selected turn. */
 interface SelectedTurn {
   sessionId: string
@@ -589,9 +584,8 @@ export function TurnProbeView({
                             )}
                             {block.text !== '' && (
                               <MarkdownText
-                                {...({ labels: mdLabels(t) } as object)}
+                                labels={mdLabels(t)}
                                 text={block.text}
-                                codeLabels={codeLabels(t)}
                               />
                             )}
                           </>
