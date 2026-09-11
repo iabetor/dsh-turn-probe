@@ -7,7 +7,9 @@ packages:
 allowBuilds:
   esbuild: true
 
-minimumReleaseAgeExclude:
-  - '@deepseek-ai/dsh-client-ui-primitives@0.1.0-rc.8'
-  - '@deepseek-ai/dsh-session-projection@0.1.0-rc.8'
-  - '@deepseek-ai/dsh-session@0.1.0-rc.8'
+# This plugin tracks the dsh 0.1.5-rc.2 line as it is published, so the
+# release-age gate stays off. Left on, a freshly published rc is silently
+# skipped and the `>=0.1.2-alpha.2` peers resolve to a much older release
+# instead — which is how this package ended up on 0.1.2-rc.1 while its source
+# compiled against the 0.1.5 contracts. Matches dsh-hippocampus's convention.
+minimumReleaseAge: 0

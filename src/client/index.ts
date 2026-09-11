@@ -9,6 +9,10 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 // 'conversation.view' SlotMap row declared by the conversation package.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: the slot service's Context merge (ctx.slots) is owned by the
+// renderer, not by ui-slots itself. Without this the augmentation is absent
+// and `ctx.slots` fails to resolve.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { en, NS, zh } from './locales.ts'
 import { sessionTreeOf, type SessionTreeNode } from './tree.ts'
 import { addressFor, fetchSessionEvents, fetchTurnWindow } from './events.ts'
@@ -47,10 +51,10 @@ export function apply(ctx: Context): void {
       const binding = ui.binding(sessionId)
       const target = binding.target('lineage')
       const snapshot = (): readonly LineageTurn[] | null => {
+        // `target` is typed against the ConversationViewSnapshotMap row the
+        // lineage view declares, so this is LineageSnapshot | undefined.
         const value = target.getSnapshot()
-        return value === undefined || value === null
-          ? null
-          : (value as { turns?: unknown }).turns as readonly LineageTurn[] | undefined ?? null
+        return value === undefined ? null : (value.turns ?? null)
       }
       const lazy: TreeSnapshotStore<readonly LineageTurn[] | null> = {
         getSnapshot: snapshot,

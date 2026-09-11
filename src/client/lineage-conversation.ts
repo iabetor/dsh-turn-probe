@@ -157,6 +157,16 @@ export interface LineageSnapshot {
   readonly running: boolean
 }
 
+// The engine's snapshot map is merge-extensible; a view target must declare
+// its own row here or `binding.target('lineage')` resolves against an empty
+// map and the key narrows to `never`. Mirrors ui-trajectory's own declaration.
+declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+  interface ConversationViewSnapshotMap {
+    /** Independently assembled data consumed by the Lineage view. */
+    lineage: LineageSnapshot
+  }
+}
+
 export const EMPTY_LINEAGE_SNAPSHOT: LineageSnapshot = {
   turns: [],
   running: false,
@@ -399,7 +409,12 @@ export interface UiConversationFace {
   events: { register(definition: ConversationNodeDefinition): unknown }
   views: { register(definition: ConversationViewDefinition): unknown }
   binding(sessionId: string): {
-    target(target: string): { getSnapshot(): unknown; subscribe(listener: () => void): () => void }
+    // 'lineage' is a key of the ConversationViewSnapshotMap row declared
+    // above, so the snapshot resolves to LineageSnapshot | undefined.
+    target(target: 'lineage'): {
+      getSnapshot(): LineageSnapshot | undefined
+      subscribe(listener: () => void): () => void
+    }
   }
 }
 
