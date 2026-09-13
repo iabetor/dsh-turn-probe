@@ -282,18 +282,41 @@
 .sessionTree .turn .field.user { color: var(--dsw-alias-label-primary, currentColor); }
 .sessionTree .turn .field.assistant { color: var(--dsw-alias-label-secondary, #aaa); }
 
-.sessionTree .turn .field.tools {
+/* Right-hand badge group on a turn row: the tool count and the turn's duration
+   are two pills in one right-aligned, vertically centred group. A fixed
+   minimum width keeps the pills' left edge on the same column across rows, so
+   a short "工具×3" and a long "耗时 1m32s" do not shift each other around. */
+.sessionTree .turn .badges {
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  align-self: center;
+  margin-left: auto;
+  padding-right: 10px;
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+.sessionTree .turn .badges > span {
   font-size: 10px;
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 10px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessionTree .turn .badges .tools {
   background: var(--dsw-alias-state-warning-subtle, rgba(250,140,22,0.12));
   color: var(--dsw-alias-state-warning-primary, #d46b08);
-  white-space: nowrap;
-  align-self: center;
-  margin-left: auto;
-  display: inline-block;
+}
+
+/* Neutral tone: duration is information, not a warning. */
+.sessionTree .turn .badges .duration {
+  background: var(--dsw-alias-fill-subtle, rgba(127,127,127,0.10));
+  color: var(--dsw-alias-label-secondary, #aaa);
 }
 
 .sessionTree .empty,

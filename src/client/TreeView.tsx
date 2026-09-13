@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from './react.ts'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import { DEFAULT_ANALYSIS_INSTRUCT } from './analyze.ts'
+import { turnDuration } from './duration.ts'
 import type { SessionTreeNode } from './tree.ts'
 import type { TurnSummary } from './turns.ts'
 import type { LineageTurn } from './lineage-conversation.ts'
@@ -143,7 +144,7 @@ function SessionList({
   rows, t, selected, onSelectTurn,
 }: {
   rows: { node: SessionTreeNode; turns: TurnSummary[] | null }[]
-  t: (key: string) => string
+  t: (key: string, params?: Record<string, unknown>) => string
   selected: SelectedTurn | null
   onSelectTurn: (sessionId: string, index: number) => void
 }) {
@@ -201,6 +202,9 @@ function SessionList({
                   const isSelected = selected !== null
                     && selected.sessionId === node.sessionId
                     && selected.index === turn.index
+                  // 耗时只对已结束、且两端时间戳齐全的轮次可得;进行中的轮次不显示
+                  // 数字,免得一个会变的数让列表反复重渲染。
+                  const duration = turnDuration(turn)
                   return (
                     <li
                       key={turn.index}
@@ -223,8 +227,20 @@ function SessionList({
                           </span>
                         )}
                       </span>
-                      {turn.toolCalls > 0 && (
-                        <span className={`${css.field} ${css.tools}`}>工具×{turn.toolCalls}</span>
+                      {/*
+                        右侧徽章组:工具数与耗时各是一个 pill。组本身在两者都为空时
+                        不渲染,但只要有一个就整体渲染 —— 组有固定最小宽度且右对齐,
+                        所以各轮的徽章左边缘对齐,不会因文字长短左右跳动。
+                      */}
+                      {(turn.toolCalls > 0 || duration !== undefined) && (
+                        <span className={css.badges}>
+                          {turn.toolCalls > 0 && (
+                            <span className={css.tools}>{t('tree.tools', { count: turn.toolCalls })}</span>
+                          )}
+                          {duration !== undefined && (
+                            <span className={css.duration} title={t('tree.duration', { duration })}>{duration}</span>
+                          )}
+                        </span>
                       )}
                     </li>
                   )
