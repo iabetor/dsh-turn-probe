@@ -11,7 +11,7 @@ import { turnDuration } from './duration.ts'
 import type { SessionTreeNode } from './tree.ts'
 import type { TurnSummary } from './turns.ts'
 import type { LineageTurn } from './lineage-conversation.ts'
-import { MarkdownText, IconTriangleRightFill14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MarkdownText, IconTriangleRightFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { React } from './react.ts'
 import css from './turn-probe.module.css'
 
@@ -129,7 +129,7 @@ function ToolBlock({ role, args }: {
         onClick={() => { setOpen(v => !v) }}
       >
         <span className={css.toolCaret}>
-          <IconTriangleRightFill14 size={10} className={open ? css.toggleOpen : undefined} />
+          <IconTriangleRightFillRegular size={10} className={open ? css.toggleOpen : undefined} />
         </span>
         <span className={css.previewRole}>{role}</span>
       </button>
@@ -177,7 +177,7 @@ function SessionList({
                 className={`${css.toggle} ${isOpen ? css.expanded : ''}`}
                 onClick={() => { toggleSession(node.sessionId) }}
               >
-                <IconTriangleRightFill14 size={12} className={isOpen ? css.toggleOpen : undefined} />
+                <IconTriangleRightFillRegular size={12} className={isOpen ? css.toggleOpen : undefined} />
               </span>
               <span
                 className={`${css.label} ${isCurrent ? css.current : ''}`}
